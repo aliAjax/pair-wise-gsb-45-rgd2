@@ -12,6 +12,9 @@ from .domain import Actor, DomainError, PermissionDenied, ValidationError
 RECORD_RE = re.compile(r"^/api/records/(\d+)$")
 ACTION_RE = re.compile(r"^/api/records/(\d+)/actions/([a-z_]+)$")
 AUDIT_RE = re.compile(r"^/api/records/(\d+)/audit$")
+RECORD_TASKS_RE = re.compile(r"^/api/records/(\d+)/reception-tasks$")
+VEHICLE_ID_RE = re.compile(r"^/api/reception/vehicles/(\d+)/active$")
+SLOT_ARRIVAL_RE = re.compile(r"^/api/reception/slots/(\d+)/arrival$")
 
 
 def make_handler(service: Any, static_dir: Path):
@@ -87,6 +90,22 @@ def make_handler(service: Any, static_dir: Path):
                 if parsed.path == "/api/stats":
                     self._send(200, service.stats(self._actor()))
                     return
+                if parsed.path == "/api/reception/vehicles":
+                    self._send(200, {"items": service.list_vehicles(self._actor())})
+                    return
+                if parsed.path == "/api/reception/waiting":
+                    self._send(200, {"items": service.waiting_tasks(self._actor())})
+                    return
+                if parsed.path == "/api/reception/board":
+                    query = parse_qs(parsed.query)
+                    record_id = query.get("record_id", [None])[0]
+                    self._send(200, service.reception_board(
+                        self._actor(), int(record_id) if record_id is not None else None))
+                    return
+                match = RECORD_TASKS_RE.match(parsed.path)
+                if match:
+                    self._send(200, {"items": service.reception_tasks(self._actor(), int(match.group(1)))})
+                    return
                 self._send(404, {"error": "not_found", "message": "路径不存在"})
             except Exception as exc:
                 self._handle_error(exc)
@@ -98,6 +117,27 @@ def make_handler(service: Any, static_dir: Path):
                 if parsed.path == "/api/records":
                     record = service.create(self._actor(), body.get("reference", ""), body.get("data", {}))
                     self._send(201, record)
+                    return
+                if parsed.path == "/api/reception/vehicles":
+                    self._send(201, service.register_vehicle(self._actor(), body.get("data", {})))
+                    return
+                if parsed.path == "/api/reception/schedule":
+                    record_id = body.get("record_id")
+                    if record_id is not None and not isinstance(record_id, int):
+                        raise ValidationError("record_id必须是整数")
+                    self._send(200, service.run_scheduling(self._actor(), record_id))
+                    return
+                match = SLOT_ARRIVAL_RE.match(parsed.path)
+                if match:
+                    result = service.register_arrival(self._actor(), int(match.group(1)), body.get("data", {}))
+                    self._send(200, result)
+                    return
+                match = VEHICLE_ID_RE.match(parsed.path)
+                if match:
+                    active = body.get("active", True)
+                    if not isinstance(active, bool):
+                        raise ValidationError("active必须是布尔值")
+                    self._send(200, service.set_vehicle_active(self._actor(), int(match.group(1)), active))
                     return
                 match = ACTION_RE.match(parsed.path)
                 if match:

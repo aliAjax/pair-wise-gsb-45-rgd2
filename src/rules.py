@@ -1,11 +1,13 @@
 """港口泊位与航道调度领域规则与状态转换。"""
 from typing import Any, Dict, Iterable, Tuple
 
-from .domain import Actor, Conflict, ValidationError, boolean, choice, integer, number, text, text_list
+from .domain import Actor, Conflict, ValidationError, boolean, choice, integer, number, text
 
 
 INITIAL_STATE = "draft"
 CREATE_ROLES = {'port_controller'}
+# 污染物接收相关角色
+RECEPTION_ROLES = {'port_controller', 'reception_operator', 'reception_manager'}
 ACTION_ROLES = {'confirm': {'port_controller'}, 'berth': {'port_controller'}, 'depart': {'port_controller'}, 'cancel': {'port_controller'}}
 TRANSITIONS = {'confirm': {'draft': 'confirmed'}, 'berth': {'confirmed': 'berthed'}, 'depart': {'berthed': 'departed'}, 'cancel': {'draft': 'cancelled', 'confirmed': 'cancelled'}}
 
@@ -14,7 +16,7 @@ class DomainRules:
     INITIAL_STATE = INITIAL_STATE
 
     def known_role(self, role: str) -> bool:
-        all_roles = set(CREATE_ROLES)
+        all_roles = set(CREATE_ROLES) | set(RECEPTION_ROLES)
         for roles in ACTION_ROLES.values():
             all_roles.update(roles)
         return role == "admin" or role in all_roles
@@ -36,6 +38,9 @@ class DomainRules:
         eta = integer(p, "eta_hour", 0, 23)
         etd = integer(p, "etd_hour", 1, 24)
         choice(p, "risk_level", ["low", "medium", "high"])
+        # 靠泊计划必须申报两种污水吨数（0表示无）与危险品类别
+        oily_tonnes = number(p, "oily_water_tonnes", 0)
+        sewage_tonnes = number(p, "sewage_tonnes", 0)
         dangerous = boolean(p, "dangerous_goods")
         if etd <= eta:
             raise ValidationError("etd_hour必须晚于eta_hour")
@@ -45,6 +50,8 @@ class DomainRules:
             raise ValidationError("剩余水深不足")
         if dangerous:
             text(p, "dangerous_class")
+        p["oily_water_tonnes"] = oily_tonnes
+        p["sewage_tonnes"] = sewage_tonnes
         return p
 
     def prepare_create(self, payload: Dict[str, Any]) -> Dict[str, Any]:

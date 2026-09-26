@@ -63,6 +63,12 @@ def number(data: Dict[str, Any], key: str, minimum: float = None, maximum: float
     return value
 
 
+def optional_number(data: Dict[str, Any], key: str, default: float = 0.0, minimum: float = None, maximum: float = None) -> float:
+    if data.get(key) is None:
+        return float(default)
+    return number(data, key, minimum, maximum)
+
+
 def integer(data: Dict[str, Any], key: str, minimum: int = None, maximum: int = None) -> int:
     value = data.get(key)
     if isinstance(value, bool) or not isinstance(value, int):
