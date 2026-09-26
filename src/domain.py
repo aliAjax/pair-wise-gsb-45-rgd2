@@ -63,6 +63,20 @@ def number(data: Dict[str, Any], key: str, minimum: float = None, maximum: float
     return value
 
 
+def optional_number(data: Dict[str, Any], key: str, default: float = 0.0, minimum: float = None, maximum: float = None) -> float:
+    value = data.get(key, default)
+    if value is None:
+        return default
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValidationError("%s必须是数字" % key)
+    value = float(value)
+    if minimum is not None and value < minimum:
+        raise ValidationError("%s不能小于%s" % (key, minimum))
+    if maximum is not None and value > maximum:
+        raise ValidationError("%s不能大于%s" % (key, maximum))
+    return value
+
+
 def integer(data: Dict[str, Any], key: str, minimum: int = None, maximum: int = None) -> int:
     value = data.get(key)
     if isinstance(value, bool) or not isinstance(value, int):
@@ -95,3 +109,17 @@ def text_list(data: Dict[str, Any], key: str, minimum: int = 0) -> List[str]:
     if len(value) < minimum:
         raise ValidationError("%s至少需要%s项" % (key, minimum))
     return [item.strip() for item in value]
+
+
+def integer_list(data: Dict[str, Any], key: str, minimum: int = 0, min_value: int = None, max_value: int = None) -> List[int]:
+    value = data.get(key, [])
+    if not isinstance(value, list) or any(isinstance(item, bool) or not isinstance(item, int) for item in value):
+        raise ValidationError("%s必须是整数列表" % key)
+    if len(value) < minimum:
+        raise ValidationError("%s至少需要%s项" % (key, minimum))
+    for item in value:
+        if min_value is not None and item < min_value:
+            raise ValidationError("%s不能小于%s" % (key, min_value))
+        if max_value is not None and item > max_value:
+            raise ValidationError("%s不能大于%s" % (key, max_value))
+    return list(value)

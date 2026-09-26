@@ -12,6 +12,9 @@ from .domain import Actor, DomainError, PermissionDenied, ValidationError
 RECORD_RE = re.compile(r"^/api/records/(\d+)$")
 ACTION_RE = re.compile(r"^/api/records/(\d+)/actions/([a-z_]+)$")
 AUDIT_RE = re.compile(r"^/api/records/(\d+)/audit$")
+RECORD_RECEPTION_RE = re.compile(r"^/api/records/(\d+)/reception$")
+RECORD_SCHEDULE_RE = re.compile(r"^/api/records/(\d+)/reception/schedule$")
+RECEIVE_RE = re.compile(r"^/api/reception/tasks/(\d+)/receive$")
 
 
 def make_handler(service: Any, static_dir: Path):
@@ -84,6 +87,16 @@ def make_handler(service: Any, static_dir: Path):
                 if match:
                     self._send(200, {"items": service.timeline(self._actor(), int(match.group(1)))})
                     return
+                match = RECORD_RECEPTION_RE.match(parsed.path)
+                if match:
+                    self._send(200, {"items": service.list_reception(self._actor(), int(match.group(1)))})
+                    return
+                if parsed.path == "/api/vehicles":
+                    self._send(200, {"items": service.list_vehicles(self._actor())})
+                    return
+                if parsed.path == "/api/reception/pending":
+                    self._send(200, {"items": service.list_pending_reception(self._actor())})
+                    return
                 if parsed.path == "/api/stats":
                     self._send(200, service.stats(self._actor()))
                     return
@@ -98,6 +111,17 @@ def make_handler(service: Any, static_dir: Path):
                 if parsed.path == "/api/records":
                     record = service.create(self._actor(), body.get("reference", ""), body.get("data", {}))
                     self._send(201, record)
+                    return
+                if parsed.path == "/api/vehicles":
+                    self._send(201, service.register_vehicle(self._actor(), body))
+                    return
+                match = RECORD_SCHEDULE_RE.match(parsed.path)
+                if match:
+                    self._send(200, {"items": service.schedule_reception(self._actor(), int(match.group(1)))})
+                    return
+                match = RECEIVE_RE.match(parsed.path)
+                if match:
+                    self._send(200, service.receive_reception(self._actor(), int(match.group(1)), body))
                     return
                 match = ACTION_RE.match(parsed.path)
                 if match:

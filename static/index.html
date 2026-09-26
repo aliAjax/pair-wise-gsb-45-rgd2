@@ -9,25 +9,49 @@
     main { max-width: 960px; margin: auto; }
     button { padding: .55rem .9rem; cursor: pointer; }
     pre { background: #f4f6f8; padding: 1rem; overflow: auto; border-radius: 8px; }
-    .row { display: flex; gap: 1rem; align-items: center; }
+    .row { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
   </style>
 </head>
 <body>
 <main>
   <h1>港口泊位与航道调度</h1>
   <p>最小演示页。完整业务流程通过README中的JSON接口调用。</p>
-  <div class="row"><button id="load">加载记录</button><button id="stats">查看状态统计</button></div>
+  <div class="row">
+    <button id="load">加载记录</button>
+    <button id="stats">查看状态统计</button>
+    <button id="pending">查看待收区</button>
+    <button id="vehicles">查看接收车</button>
+  </div>
   <pre id="output">点击上方按钮读取服务状态。</pre>
 </main>
 <script>
 const headers = {"X-User-Id":"demo-admin","X-Role":"admin","X-Org":"demo"};
+const MEDIA = {"oily_water":"污油水","sewage":"生活污水"};
+const output = document.getElementById("output");
 async function show(path) {
   const response = await fetch(path, {headers});
   const data = await response.json();
-  document.getElementById("output").textContent = JSON.stringify(data, null, 2);
+  output.textContent = JSON.stringify(data, null, 2);
+}
+async function showPending() {
+  const response = await fetch("/api/reception/pending", {headers});
+  const data = await response.json();
+  if (!response.ok) { output.textContent = JSON.stringify(data, null, 2); return; }
+  const items = data.items || [];
+  if (!items.length) { output.textContent = "待收区为空。"; return; }
+  output.textContent = items.map(t => {
+    const remaining = Math.round((t.declared_liters - t.received_liters) * 100) / 100;
+    const medium = MEDIA[t.medium] || t.medium;
+    const history = (t.carry_overs || []).map(c => "  结转：" + c.from_slot + "时→" + (c.to_slot === null ? "待收区" : c.to_slot + "时") + "，剩余" + c.remaining_liters + "升，原因：" + c.reason).join("\n");
+    return "任务#" + t.id + " 航次" + t.reference + " 船" + t.vessel + " " + medium +
+      " 待收" + remaining + "升（还差" + t.shortfall_liters + "升）\n  原因：" + (t.pending_reason || "无") +
+      (history ? "\n" + history : "");
+  }).join("\n\n");
 }
 document.getElementById("load").onclick = () => show("/api/records?limit=20");
 document.getElementById("stats").onclick = () => show("/api/stats");
+document.getElementById("pending").onclick = showPending;
+document.getElementById("vehicles").onclick = () => show("/api/vehicles");
 </script>
 </body>
 </html>
